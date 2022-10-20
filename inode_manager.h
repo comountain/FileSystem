@@ -4,6 +4,8 @@
 #define inode_h
 
 #include <stdint.h>
+#include <time.h>
+#include <map>
 #include "extent_protocol.h"
 
 #define DISK_SIZE  1024*1024*16
@@ -73,6 +75,7 @@ typedef struct inode {
   unsigned int atime;
   unsigned int mtime;
   unsigned int ctime;
+  int bn;
   blockid_t blocks[NDIRECT+1];   // Data block addresses
 } inode_t;
 
