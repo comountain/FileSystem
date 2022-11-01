@@ -4,6 +4,8 @@
 #define inode_h
 
 #include <stdint.h>
+#include <time.h>
+#include <map>
 #include "extent_protocol.h"
 
 #define DISK_SIZE  1024*1024*16
@@ -35,9 +37,10 @@ typedef struct superblock {
 class block_manager {
  private:
   disk *d;
-  std::map <uint32_t, int> using_blocks;
+  
  public:
   block_manager();
+  std::map <uint32_t, int> using_blocks;
   struct superblock sb;
 
   uint32_t alloc_block();
@@ -73,16 +76,18 @@ typedef struct inode {
   unsigned int atime;
   unsigned int mtime;
   unsigned int ctime;
+  int bn;
   blockid_t blocks[NDIRECT+1];   // Data block addresses
 } inode_t;
 
 class inode_manager {
  private:
-  block_manager *bm;
+  
   struct inode* get_inode(uint32_t inum);
   void put_inode(uint32_t inum, struct inode *ino);
 
  public:
+  block_manager *bm;
   inode_manager();
   uint32_t alloc_inode(uint32_t type);
   void free_inode(uint32_t inum);

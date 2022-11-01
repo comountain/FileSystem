@@ -19,8 +19,10 @@ class extent_protocol {
   };
 
   enum types {
-    T_DIR = 1,
-    T_FILE
+    T_FREE = 0,
+    T_DIR,
+    T_FILE,
+    T_SYM
   };
 
   struct attr {
