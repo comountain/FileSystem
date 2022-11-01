@@ -23,7 +23,6 @@ test_if_has_mount(){
 test_if_has_mount
 
 ##################################################
-
 # run test a
 perl ./test-lab2a-part2-a.pl chfs1 | grep -q "Passed all"
 if [ $? -ne 0 ];

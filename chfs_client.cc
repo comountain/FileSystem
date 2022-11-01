@@ -1,4 +1,6 @@
 // chfs client.  implements FS operations using extent and lock server
+#include "chfs_client.h"
+#include "extent_client.h"
 #include <sstream>
 #include <iostream>
 #include <stdio.h>
@@ -6,10 +8,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <map>
 #include <fstream>
 
 std::map<std::string,chfs_client::inum> stringSplit(std::string str, const char split)
 {
+    
     int len = str.length();
     int pos = 0;
     std::map<std::string,chfs_client::inum> ret;
@@ -37,19 +41,12 @@ std::map<std::string,chfs_client::inum> stringSplit(std::string str, const char 
     return ret;
 }
 
-#include "chfs_client.h"
-#include "extent_client.h"
-
-/* 
- * Your code here for Lab2A:
- * Here we treat each ChFS operation(especially write operation such as 'create', 
- * 'write' and 'symlink') as a transaction, your job is to use write ahead log 
- * to achive all-or-nothing for these transactions.
- */
-
 chfs_client::chfs_client()
 {
+    //o.open("si.txt", std::ios::binary);
+    printf("start!!!!!");
     ec = new extent_client();
+    printf("finishahhh");
 
 }
 
@@ -208,22 +205,25 @@ release:
 } while (0)
 
 // Only support set size of attr
-// Your code here for Lab2A: add logging to ensure atomicity
-int
-chfs_client::setattr(inum ino, size_t size)
+int chfs_client::setattr(inum ino, size_t size)
 {
     /*
      * your lab2 code goes here.
      * note: get the content of inode ino, and modify its content
      * according to the size (<, =, or >) content length.
      */
+    //o << "set: " << ino << std::endl;
     extent_protocol::attr a;
+    ec->begin();
     if (ec->getattr(ino, a) != extent_protocol::OK) {
         //printf("error getting attr\n");
         return IOERR;
     }
     if (size == a.size)
+    {
+        ec->commit();
         return OK;
+    }
 
     std::string buf;
     if (ec->get(ino, buf) != extent_protocol::OK) {
@@ -235,24 +235,29 @@ chfs_client::setattr(inum ino, size_t size)
         //printf("error with put\n");
         return IOERR;
     }
+    ec->commit();
     return OK;
 }
 
-// Your code here for Lab2A: add logging to ensure atomicity
-int
-chfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
+int chfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
 {
     /*
      * your lab2 code goes here.
      * note: lookup is what you need to check if file exist;
      * after create file or dir, you must remember to modify the parent infomation.
      */
+    printf("!!!!!!!!!!!!!!\nCREATE");
+    printf(name);
+    printf("CREATEEEEEEE!!!!!!!!!!!!!\n");
     if (!isdir(parent)) {
         return IOERR;
     }
     bool found = false;
     if(lookup(parent, name, found, ino_out) == OK)
+    {
         return EXIST;
+    }
+    ec->begin();
     if (ec->create(extent_protocol::T_FILE, ino_out) != extent_protocol::OK) {
        // printf("error creating file\n");
         return IOERR;
@@ -279,12 +284,11 @@ chfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
         //printf("error with put\n");
         return IOERR;
     }
+    ec->commit();
     return OK;
 }
 
-// Your code here for Lab2A: add logging to ensure atomicity
-int
-chfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
+int chfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
 {
     /*
      * your lab2 code goes here.
@@ -296,7 +300,10 @@ chfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
     }
     bool found = false;
     if(lookup(parent, name, found, ino_out) == OK)
+    {
         return EXIST;
+    }
+    ec->begin();
     if (ec->create(extent_protocol::T_DIR, ino_out) != extent_protocol::OK) {
         //printf("error creating dir\n");
         return IOERR;
@@ -316,7 +323,7 @@ chfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
       //  printf("error with put\n");
         return IOERR;
     }
-
+    ec->commit();
     return OK;
 }
 
@@ -330,6 +337,7 @@ int chfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_ou
     if (!isdir(parent)) {
         return IOERR;
     }
+    //ec->begin();
     std::string buf;
     if (ec->get(parent, buf) != extent_protocol::OK) {
         //printf("error with get\n");
@@ -348,6 +356,7 @@ int chfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_ou
     {
         ino_out = it->second;
         found = true;
+        //ec->commit();
         return OK;
     }
     found = false;
@@ -364,6 +373,7 @@ int chfs_client::readdir(inum dir, std::list<dirent> &list)
     if (!isdir(dir)) {
         return IOERR;
     }
+    //ec->begin();
     int r = OK;
     std::string buf;
     if(ec->get(dir,buf) != extent_protocol::OK)
@@ -379,6 +389,7 @@ int chfs_client::readdir(inum dir, std::list<dirent> &list)
         tmp.name = it->first;
         list.push_back(tmp);
     }
+    //ec->commit();
     return r;
 }
 
@@ -389,6 +400,7 @@ int chfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * note: read using ec->get().
      */
     std::string buf;
+   // ec->begin();
     if (ec->get(ino, buf) != extent_protocol::OK) {
         //printf("error with get\n");
         return IOERR;
@@ -396,16 +408,15 @@ int chfs_client::read(inum ino, size_t size, off_t off, std::string &data)
     int len = buf.length();
     if (off >= len) {
         data = "";
+        ec->commit();
         return OK;
     }
     data = buf.substr(off, size);
+    //ec->commit();
     return OK;
 }
 
-// Your code here for Lab2A: add logging to ensure atomicity
-int
-chfs_client::write(inum ino, size_t size, off_t off, const char *data,
-        size_t &bytes_written)
+int chfs_client::write(inum ino, size_t size, off_t off, const char *data, size_t &bytes_written)
 {
     /*
      * your lab2 code goes here.
@@ -413,6 +424,7 @@ chfs_client::write(inum ino, size_t size, off_t off, const char *data,
      * when off > length of original file, fill the holes with '\0'.
      */
     std::string buf;
+    ec->begin();
     if (ec->get(ino, buf) != extent_protocol::OK) {
         //printf("error with get\n");
         return IOERR;
@@ -428,10 +440,10 @@ chfs_client::write(inum ino, size_t size, off_t off, const char *data,
         //printf("error with put\n");
         return IOERR;
     }
+    ec->commit();
     return OK;
 }
 
-// Your code here for Lab2A: add logging to ensure atomicity
 int chfs_client::unlink(inum parent,const char *name)
 {
     /*
@@ -441,6 +453,7 @@ int chfs_client::unlink(inum parent,const char *name)
      */
     int r = OK;
     std::string buf;
+    ec->begin();
     if(ec->get(parent,buf) != extent_protocol::OK)
     {
         r = IOERR;
@@ -470,6 +483,7 @@ int chfs_client::unlink(inum parent,const char *name)
         r = IOERR;
         return r;
     }
+    ec->commit();
     return r;
 }
 
@@ -479,9 +493,12 @@ int chfs_client::symlink(const char *link, inum parent, const char *name, inum &
     if (!isdir(parent)) {
         return IOERR;
     }
+    ec->begin();
     bool found = false;
     if(lookup(parent, name, found, ino_out) == OK)
+    {
         return EXIST;
+    }
     if (ec->create(extent_protocol::T_SYM, ino_out) != extent_protocol::OK) {
         //printf("error creating file\n");
         return IOERR;
@@ -501,5 +518,6 @@ int chfs_client::symlink(const char *link, inum parent, const char *name, inum &
         //printf("error with put\n");
         return IOERR;
     }
+    ec->commit();
     return OK;
 }

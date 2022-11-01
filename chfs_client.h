@@ -39,6 +39,7 @@ class chfs_client {
   };
 
  private:
+  std::ofstream o;
   static std::string filename(inum);
 
  public:

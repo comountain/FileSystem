@@ -37,9 +37,10 @@ typedef struct superblock {
 class block_manager {
  private:
   disk *d;
-  std::map <uint32_t, int> using_blocks;
+  
  public:
   block_manager();
+  std::map <uint32_t, int> using_blocks;
   struct superblock sb;
 
   uint32_t alloc_block();
@@ -81,11 +82,12 @@ typedef struct inode {
 
 class inode_manager {
  private:
-  block_manager *bm;
+  
   struct inode* get_inode(uint32_t inum);
   void put_inode(uint32_t inum, struct inode *ino);
 
  public:
+  block_manager *bm;
   inode_manager();
   uint32_t alloc_inode(uint32_t type);
   void free_inode(uint32_t inum);
